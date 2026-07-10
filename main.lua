@@ -1,20 +1,34 @@
--- SWILL Script Engine
--- Design: Neo-Glass "Kill/Chop Aura" Interface
--- Full functional GUI with slider logic
+-- SWILL Script Engine v2.0
+-- Full Functional Neo-Glass UI + Working Logic
+-- Design: Kill / Chop Aura with Sliders, Toggles & Dropdowns
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local RootPart = Character:WaitForChild("HumanoidRootPart")
 
--- Создание ScreenGui
+-- ==========================================
+-- ПЕРЕМЕННЫЕ СОСТОЯНИЯ (ЛОГИКА)
+-- ==========================================
+local KillAuraEnabled = false
+local ChopAuraEnabled = false
+local KillRangeValue = 100
+local ChopRangeValue = 100
+local SelectedTreeType = "Small Tree" -- Default
+
+-- ==========================================
+-- ИНТЕРФЕЙС (GUI) - Нео-стекло
+-- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "SwillHub"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
--- Основной контейнер (Menu)
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 420, 0, 520)
@@ -24,19 +38,16 @@ MainFrame.BackgroundTransparency = 0.1
 MainFrame.BorderSizePixel = 0
 MainFrame.Parent = ScreenGui
 
--- Создание закругленных углов (эффект стекла)
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 16)
 UICorner.Parent = MainFrame
 
--- Эффект свечения по краям (голубой неон)
 local UIStroke = Instance.new("UIStroke")
 UIStroke.Color = Color3.fromRGB(65, 200, 255)
 UIStroke.Thickness = 1.5
 UIStroke.Transparency = 0.5
 UIStroke.Parent = MainFrame
 
--- Заголовок (слева)
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(0, 150, 0, 40)
 Title.Position = UDim2.new(0, 20, 0, 15)
@@ -48,7 +59,6 @@ Title.TextSize = 22
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
 
--- Декор-линия под заголовком
 local Line = Instance.new("Frame")
 Line.Size = UDim2.new(0, 60, 0, 2)
 Line.Position = UDim2.new(0, 20, 0, 55)
@@ -57,8 +67,10 @@ Line.BackgroundTransparency = 0.3
 Line.BorderSizePixel = 0
 Line.Parent = MainFrame
 
--- Функция создания красивых переключателей (Toggle)
-local function CreateToggle(yPos, titleText, iconText)
+-- ==========================================
+-- ФУНКЦИЯ СОЗДАНИЯ ТОГГЛОВ
+-- ==========================================
+local function CreateToggle(yPos, titleText, iconText, callback)
 	local Container = Instance.new("Frame")
 	Container.Size = UDim2.new(1, -40, 0, 50)
 	Container.Position = UDim2.new(0, 20, 0, yPos)
@@ -107,37 +119,33 @@ local function CreateToggle(yPos, titleText, iconText)
 	ToggleIndCorner.CornerRadius = UDim.new(1, 0)
 	ToggleIndCorner.Parent = ToggleIndicator
 	
+	local isOn = false
 	local function Toggle()
-		local isOn = ToggleIndicator.Position.X.Offset == 4
+		isOn = not isOn
 		if isOn then
-			TweenService:Create(ToggleIndicator, TweenInfo.new(0.2), {Position = UDim2.new(0, 4, 0.5, -8), BackgroundColor3 = Color3.fromRGB(80, 80, 85)}):Play()
-			TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 45)}):Play()
-		else
 			TweenService:Create(ToggleIndicator, TweenInfo.new(0.2), {Position = UDim2.new(1, -20, 0.5, -8), BackgroundColor3 = Color3.fromRGB(65, 200, 255)}):Play()
 			TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 80, 120)}):Play()
+		else
+			TweenService:Create(ToggleIndicator, TweenInfo.new(0.2), {Position = UDim2.new(0, 4, 0.5, -8), BackgroundColor3 = Color3.fromRGB(80, 80, 85)}):Play()
+			TweenService:Create(ToggleBtn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 45)}):Play()
 		end
+		if callback then callback(isOn) end
 	end
 	
-	local function CreateClickDetector()
-		local c = Instance.new("TextButton")
-		c.Size = UDim2.new(1, 0, 1, 0)
-		c.BackgroundTransparency = 1
-		c.Text = ""
-		c.Parent = Container
-		c.MouseButton1Click:Connect(Toggle)
-	end
-	CreateClickDetector()
+	local c = Instance.new("TextButton")
+	c.Size = UDim2.new(1, 0, 1, 0)
+	c.BackgroundTransparency = 1
+	c.Text = ""
+	c.Parent = Container
+	c.MouseButton1Click:Connect(Toggle)
 	
 	return ToggleIndicator
 end
 
--- Создаем Toggle для Kill Aura
-local KillToggle = CreateToggle(80, "Kill Aura", "⚔️")
--- Создаем Toggle для Chop Aura
-local ChopToggle = CreateToggle(320, "Chop Aura", "🪓")
-
--- Функция создания красивого ползунка (Slider)
-local function CreateSlider(yPos, titleText, min, max, default)
+-- ==========================================
+-- ФУНКЦИЯ СОЗДАНИЯ ПОЛЗУНКОВ
+-- ==========================================
+local function CreateSlider(yPos, titleText, min, max, default, callback)
 	local Container = Instance.new("Frame")
 	Container.Size = UDim2.new(1, -40, 0, 60)
 	Container.Position = UDim2.new(0, 20, 0, yPos)
@@ -207,17 +215,7 @@ local function CreateSlider(yPos, titleText, min, max, default)
 		SliderFill:TweenSize(UDim2.new(percent, 0, 1, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.1, true)
 		DragBtn:TweenPosition(UDim2.new(percent, -7, 0.5, -7), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.1, true)
 		ValueText.Text = tostring(value)
-	end
-	
-	local function StartDrag(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			UpdateSlider(input)
-		end
-	end
-	
-	local function StopDrag(input)
-		dragging = false
+		if callback then callback(value) end
 	end
 	
 	local SliderInput = Instance.new("TextButton")
@@ -226,9 +224,12 @@ local function CreateSlider(yPos, titleText, min, max, default)
 	SliderInput.Text = ""
 	SliderInput.Parent = Container
 	
-	SliderInput.MouseButton1Down:Connect(StartDrag)
-	SliderInput.MouseButton1Up:Connect(StopDrag)
-	SliderInput.MouseLeave:Connect(StopDrag)
+	SliderInput.MouseButton1Down:Connect(function(input)
+		dragging = true
+		UpdateSlider(input)
+	end)
+	SliderInput.MouseButton1Up:Connect(function() dragging = false end)
+	SliderInput.MouseLeave:Connect(function() dragging = false end)
 	
 	UserInputService.InputChanged:Connect(function(input)
 		if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
@@ -239,11 +240,9 @@ local function CreateSlider(yPos, titleText, min, max, default)
 	return ValueText
 end
 
--- Создаем ползунки для диапазона
-local KillRange = CreateSlider(140, "Kill Aura Range", 10, 200, 100)
-local ChopRange = CreateSlider(380, "Chop Aura Range", 10, 200, 100)
-
--- Выпадающий список для Tree Type (как на картинке)
+-- ==========================================
+-- ВЫПАДАЮЩИЙ СПИСОК (Дропдаун)
+-- ==========================================
 local DropdownY = 440
 local DropdownContainer = Instance.new("Frame")
 DropdownContainer.Size = UDim2.new(1, -40, 0, 40)
@@ -294,33 +293,148 @@ DropdownArrow.Font = Enum.Font.GothamBold
 DropdownArrow.TextSize = 16
 DropdownArrow.Parent = DropdownBox
 
--- Функционал для скрипта (пример работы)
-local function EnableKillAura()
-	local range = tonumber(KillRange.Text)
-	print("[SWILL]: Kill Aura ENABLED with Range: " .. range)
-	-- Тут твой логика убийства мобов
-end
+-- Функционал дропдауна
+local TreeOptions = {"Small Tree", "Big Tree", "Palm Tree", "Oak Tree"}
+local DropdownBtn = Instance.new("TextButton")
+DropdownBtn.Size = UDim2.new(1, 0, 1, 0)
+DropdownBtn.BackgroundTransparency = 1
+DropdownBtn.Text = ""
+DropdownBtn.Parent = DropdownBox
 
-local function EnableChopAura()
-	local range = tonumber(ChopRange.Text)
-	print("[SWILL]: Chop Aura ENABLED with Range: " .. range)
-	-- Тут твоя логика рубки деревьев
-end
+local DropdownMenu = Instance.new("Frame")
+DropdownMenu.Size = UDim2.new(1, 0, 0, #TreeOptions * 30)
+DropdownMenu.Position = UDim2.new(0, 0, 1, 5)
+DropdownMenu.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+DropdownMenu.BackgroundTransparency = 0.2
+DropdownMenu.Visible = false
+DropdownMenu.Parent = DropdownBox
+local MenuCorner = Instance.new("UICorner")
+MenuCorner.CornerRadius = UDim.new(0, 8)
+MenuCorner.Parent = DropdownMenu
 
--- Привязка логики к переключателям (пример)
-KillToggle:GetPropertyChangedSignal("BackgroundColor3"):Connect(function()
-	if KillToggle.BackgroundColor3 == Color3.fromRGB(65, 200, 255) then
-		EnableKillAura()
-	end
+local menuOpen = false
+DropdownBtn.MouseButton1Click:Connect(function()
+	menuOpen = not menuOpen
+	DropdownMenu.Visible = menuOpen
 end)
 
--- Инициализация UI
-print("[SWILL]: GUI Interface Loaded Successfully")
+for i, option in ipairs(TreeOptions) do
+	local optBtn = Instance.new("TextButton")
+	optBtn.Size = UDim2.new(1, 0, 0, 30)
+	optBtn.Position = UDim2.new(0, 0, 0, (i-1)*30)
+	optBtn.BackgroundTransparency = 1
+	optBtn.Text = option
+	optBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+	optBtn.Font = Enum.Font.GothamMedium
+	optBtn.TextSize = 14
+	optBtn.Parent = DropdownMenu
+	
+	optBtn.MouseButton1Click:Connect(function()
+		DropdownText.Text = option
+		SelectedTreeType = option
+		DropdownMenu.Visible = false
+		menuOpen = false
+	end)
+end
 
--- Защита от сбоев (галюцинаций) - удаление лишних предупреждений
-local function CleanUI()
-	if ScreenGui and MainFrame then
-		-- UI стабилен и работает
+-- ==========================================
+-- РЕАЛЬНАЯ ЛОГИКА (УБИЙСТВО И РУБКА)
+-- ==========================================
+local function FindClosestTarget(range, isTree)
+	local closest = nil
+	local closestDist = range
+	local rootPos = RootPart.Position
+	
+	for _, obj in pairs(Workspace:GetDescendants()) do
+		if obj:IsA("Model") and obj:FindFirstChild("HumanoidRootPart") then
+			local part = obj.HumanoidRootPart
+			local dist = (rootPos - part.Position).Magnitude
+			if dist < closestDist and obj ~= Character then
+				if isTree then
+					-- Логика поиска деревьев (по имени или наличию деревянной текстуры)
+					if obj.Name:find(SelectedTreeType) or obj.Name:find("Tree") then
+						closest = obj
+						closestDist = dist
+					end
+				else
+					-- Логика поиска врагов (не игрок, не дерево, имеет Humanoid)
+					local hum = obj:FindFirstChild("Humanoid")
+					if hum and hum.Health > 0 and obj.Name ~= "Tree" and not obj.Name:find("Tree") then
+						closest = obj
+						closestDist = dist
+					end
+				end
+			end
+		end
+	end
+	return closest
+end
+
+local function KillLogic()
+	if not KillAuraEnabled then return end
+	local target = FindClosestTarget(KillRangeValue, false)
+	if target then
+		local hum = target:FindFirstChild("Humanoid")
+		if hum then
+			hum.Health = 0 -- Мгновенное убийство
+			-- Альтернатива для некоторых игр: target:BreakJoints()
+		end
 	end
 end
-CleanUI()
+
+local function ChopLogic()
+	if not ChopAuraEnabled then return end
+	local tree = FindClosestTarget(ChopRangeValue, true)
+	if tree then
+		-- Удаляем дерево (эмуляция рубки)
+		local part = tree:FindFirstChild("HumanoidRootPart") or tree:FindFirstChildWhichIsA("BasePart")
+		if part then
+			part:Destroy() -- Или используй разбивку на части
+		end
+	end
+end
+
+-- ==========================================
+-- ПРИВЯЗКА ИНТЕРФЕЙСА К ЛОГИКЕ
+-- ==========================================
+local function UpdateKillToggle(state)
+	KillAuraEnabled = state
+	print("[SWILL]: Kill Aura " .. (state and "ENABLED" or "DISABLED") .. " | Range: " .. KillRangeValue)
+end
+
+local function UpdateChopToggle(state)
+	ChopAuraEnabled = state
+	print("[SWILL]: Chop Aura " .. (state and "ENABLED" or "DISABLED") .. " | Range: " .. ChopRangeValue)
+end
+
+local function UpdateKillRange(val)
+	KillRangeValue = val
+end
+
+local function UpdateChopRange(val)
+	ChopRangeValue = val
+end
+
+-- Создание элементов с привязкой колбэков
+CreateToggle(80, "Kill Aura", "⚔️", UpdateKillToggle)
+CreateToggle(320, "Chop Aura", "🪓", UpdateChopToggle)
+CreateSlider(140, "Kill Aura Range", 10, 200, 100, UpdateKillRange)
+CreateSlider(380, "Chop Aura Range", 10, 200, 100, UpdateChopRange)
+
+-- ==========================================
+-- ГЛАВНЫЙ ЦИКЛ (ОБНОВЛЕНИЕ КАЖДЫЙ КАДР)
+-- ==========================================
+RunService.RenderStepped:Connect(function()
+	-- Обновляем логику каждые 0.1 секунды для оптимизации
+	task.wait(0.1)
+	
+	-- Проверка на смерть персонажа и перезагрузку
+	if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+		return
+	end
+	
+	KillLogic()
+	ChopLogic()
+end)
+
+print("[SWILL]: Enhanced GUI + Logic Loaded Successfully")
